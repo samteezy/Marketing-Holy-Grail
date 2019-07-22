@@ -225,8 +225,8 @@ public class ClosedLoop_TestUtility{
 	
     public static User createUser(Id profileId){
 		User user = new user(
-			FirstName = 'Matthew',
-			LastName = 'McEachern', 
+			FirstName = 'Maurice',
+			LastName = 'Moss', 
 			Alias = 'SubC4i', 
 			Email = UserInfo.getOrganizationId()+System.now().millisecond()+'@SubC4i-ClosedLoop.com', 
 			Username = UserInfo.getOrganizationId()+System.now().millisecond()+'@SubC4i-ClosedLoop.com', 
