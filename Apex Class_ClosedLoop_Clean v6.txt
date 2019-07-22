@@ -1,0 +1,42 @@
+/*
+* Apex Class: ClosedLoop_Clean
+* Description: 
+	- Delete all Closed Loop Records
+* Created By: Matthew McEachern
+* Created Date: 11/7/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/25/2017
+*/
+
+global with sharing class ClosedLoop_Clean implements Database.Batchable<sObject>{
+	@deprecated 
+	global Boolean checkDeletableCLR(){return false;}
+	
+	global Database.QueryLocator start(Database.BatchableContext BC){
+		if(ClosedLoop_Security.isDeletableObject('SubC4i__Closed_Loop_Report__c')){
+			String query = 'SELECT Id FROM SubC4i__Closed_Loop_Report__c';
+			return Database.getQueryLocator(query);
+		}
+		else{
+			system.debug('Current user does not have delete permission on object SubC4i__Closed_Loop_Report__c.');
+			System.abortJob(bc.getJobId());
+			return null;
+		}
+	}
+
+   	global void execute(Database.BatchableContext BC, List<SubC4i__Closed_Loop_Report__c> CLRlist){
+		if(!ClosedLoop_Security.isDeletableObject('SubC4i__Closed_Loop_Report__c')){
+			return;
+		}
+		List<SubC4i__Closed_Loop_Report__c> deleteCLRlist = new List<SubC4i__Closed_Loop_Report__c>();
+		deleteCLRlist.addAll(CLRlist);
+		if(deleteCLRlist.size() > 0){
+			delete deleteCLRlist;
+		}
+	}
+	
+	global void finish(Database.BatchableContext BC){
+		SubC4i.ClosedLoop_Refresh refreshBatch = new SubC4i.ClosedLoop_Refresh();
+		Database.executeBatch(refreshBatch);
+	}
+}

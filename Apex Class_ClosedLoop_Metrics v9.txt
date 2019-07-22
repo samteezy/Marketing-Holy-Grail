@@ -1,0 +1,365 @@
+/*
+* Apex Class: ClosedLoop_Metrics
+* Description: 
+	- Produce summary metrics to use for Group By Opportunities and/or Campaigns
+		.First Attribution
+		.First Attribution-To-Opp Days
+		.First Attribution-To-Close Days
+		.Last Attribution
+		.Last Before Opp
+		.Last Before Close
+		.Equal Attribution
+		.Position Based Attribution
+* Created By: Matthew McEachern
+* Created Date: 11/3/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/24/2017
+*/
+
+public with sharing class ClosedLoop_Metrics implements Queueable {
+	//Collections
+	private Set<Id> accountIds = new Set<Id>();
+	private Set<Id> oppIds = new Set<Id>();
+	private Map<Id,Opportunity> oppMap = new Map<Id,Opportunity>();
+	private Map<Id,Decimal> accountTotalContactsMap = new Map<Id,Decimal>();
+	private static SubC4i__Closed_Loop_Setting__c CLSsetup = null;
+	private static String CLSinfluenceDate = null;
+	private static Decimal CLSinfluenceStartMonths = null;
+	private static String CLSoppAmount = null;
+	private List<SubC4i__Closed_Loop_Report__c> updateCLR = new List<SubC4i__Closed_Loop_Report__c>();
+	private Map<Id,SubC4i__Closed_Loop_Report__c> CLRmap = new Map<Id,SubC4i__Closed_Loop_Report__c>();
+	private Map<Id,Map<Date,List<SubC4i__Closed_Loop_Report__c>>> oppInfluenceDateCLRmap = new Map<Id,Map<Date,List<SubC4i__Closed_Loop_Report__c>>>();
+	private Map<Id,List<Date>> beforeOppInfluenceDateMap = new Map<Id,List<Date>>();
+	private Map<Id,List<Date>> oppInfluenceDateMap = new Map<Id,List<Date>>();
+	private Map<Id,List<SubC4i__Closed_Loop_Report__c>> oppCLRmap = new Map<Id,List<SubC4i__Closed_Loop_Report__c>>();
+	private Set<Id> firstCLRIds = new Set<Id>();
+
+	public ClosedLoop_Metrics(Set<Id> tempAccountIds, Set<Id> tempOppIds){
+		accountIds = tempAccountIds;
+		oppIds = tempOppIds;
+	}
+
+	public void execute(QueueableContext context){
+		if(
+			//Opportunity
+			ClosedLoop_Security.isAccessibleField('Id','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('CreatedDate','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('IsClosed','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('CloseDate','Opportunity') && 
+			//Closed Loop Setting
+			ClosedLoop_Security.isAccessibleField('Id','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c') &&
+			//Closed Loop Report
+			ClosedLoop_Security.isAccessibleField('Id','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isUpdateableField('SubC4i__Account__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isUpdateableField('SubC4i__Contact__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isUpdateableField('SubC4i__Campaign__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isUpdateableField('SubC4i__Parent_Campaign__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Snapshot_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Snapshot_Close_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Snapshot_Forecast_Category__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Snapshot_Probability__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Snapshot_Stage__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Campaign_Member_Created_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Campaign_Member_Status__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Order__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__First_Attribution__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__First_Attribution_To_Opp_Days__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__First_Attribution_To_Opp_Days_CalcOnly__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__First_Attribution_To_Close_Days__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__First_Attribution_To_Close_Days_CalcOnly__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Last_Before_Opp_Attribution__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Last_Before_Close_Attribution__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Equal_Attribution_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Equal_Attribution_Percent__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Position_Based_Attribution_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Position_Based_Attribution_Percent__c','SubC4i__Closed_Loop_Report__c')){
+			//Get Closed Loop Setting
+			CLSsetup = [SELECT Id, SubC4i__Active__c, SubC4i__Influence_Date__c, SubC4i__Influence_Start__c, SubC4i__Opportunity_Amount__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true LIMIT 1];
+			if(CLSsetup != null){
+				CLSinfluenceDate = CLSsetup.SubC4i__Influence_Date__c;
+				CLSinfluenceStartMonths = CLSsetup.SubC4i__Influence_Start__c;
+				CLSoppAmount = CLSsetup.SubC4i__Opportunity_Amount__c;
+			}
+
+			//Get Opportunity Related CLR records
+			List<SubC4i__Closed_Loop_Report__c> CLRlist = new List<SubC4i__Closed_Loop_Report__c>();
+			string selectSOQL_CLR = 'SELECT Id, SubC4i__Account__c, SubC4i__Contact__c, SubC4i__Opportunity__c, SubC4i__Opportunity__r.CreatedDate, SubC4i__Campaign__c, SubC4i__Influence_Order__c, SubC4i__Influence_Date__c, SubC4i__First_Attribution__c, SubC4i__First_Attribution_To_Opp_Days__c, SubC4i__First_Attribution_To_Opp_Days_CalcOnly__c, SubC4i__First_Attribution_To_Close_Days__c, SubC4i__First_Attribution_To_Close_Days_CalcOnly__c, SubC4i__Last_Before_Opp_Attribution__c, SubC4i__Last_Before_Close_Attribution__c, SubC4i__Equal_Attribution_Amount__c, SubC4i__Equal_Attribution_Percent__c, SubC4i__Position_Based_Attribution_Amount__c, SubC4i__Position_Based_Attribution_Percent__c';
+			string fromSOQL_CLR = ' FROM SubC4i__Closed_Loop_Report__c ';
+			string whereSOQL_CLR = 'WHERE SubC4i__Opportunity__c IN: oppIds AND SubC4i__Influence_Date__c != null';
+			string completeSOQL_CLR = selectSOQL_CLR + fromSOQL_CLR + whereSOQL_CLR;
+			CLRlist = Database.query(completeSOQL_CLR);
+
+			//Get Related Opportunities
+			if(ClosedLoop_Security.isAccessibleField(CLSoppAmount,'Opportunity')){
+				List<Opportunity> oppList = new List<Opportunity>();
+				string selectSOQL_Opp = 'SELECT Id, IsClosed, CreatedDate, CloseDate, ' + CLSoppAmount;
+				string fromSOQL_Opp = ' FROM Opportunity ';
+				string whereSOQL_Opp = 'WHERE Id IN: oppIds';
+				string completeSOQL_Opp = selectSOQL_Opp + fromSOQL_Opp + whereSOQL_Opp;
+				oppList = Database.query(completeSOQL_Opp);
+				oppMap.putAll(oppList);
+			}
+			else{
+				return;
+			}
+
+	   		//Get Total Contacts per Account
+	   		for(AggregateResult ar: [SELECT SubC4i__Account__c accId, Count(SubC4i__Contact__c) totalContacts, Count_Distinct(SubC4i__Contact__c) uniqueContacts FROM SubC4i__Closed_Loop_Report__c WHERE SubC4i__Campaign__c != null GROUP BY SubC4i__Account__c]){
+	   			Id accountId = (Id)ar.get('accId');
+	   			Integer totalContacts = (Integer)ar.get('totalContacts');
+	   			Integer uniqueContacts = (Integer)ar.get('uniqueContacts');
+	   			Decimal totalContactsDecimal = decimal.valueOf(string.valueOf(totalContacts));
+	   			Decimal uniqueContactsDecimal = decimal.valueOf(string.valueOf(uniqueContacts));
+	   			Decimal contactsCalcDecimal = uniqueContactsDecimal/totalContactsDecimal;
+	   			accountTotalContactsMap.put(accountId,contactsCalcDecimal);
+	   		}
+
+			//Sort Collections
+			for(SubC4i__Closed_Loop_Report__c CLR: CLRlist){
+				//Reset Metrics
+				CLR.SubC4i__Influence_Account_Contacts__c = 0;
+				CLR.SubC4i__Influence_Opportunity_Count__c = 0;
+				CLR.SubC4i__Opportunity_Amount__c = 0;
+				CLR.SubC4i__Influence_Order__c = null;
+				CLR.SubC4i__First_Attribution__c = 0;
+				CLR.SubC4i__Last_Before_Opp_Attribution__c = 0;
+				CLR.SubC4i__Last_Before_Close_Attribution__c = 0;
+				CLR.SubC4i__Equal_Attribution_Percent__c = 0;
+				CLR.SubC4i__Equal_Attribution_Amount__c = 0;
+				CLR.SubC4i__Position_Based_Attribution_Percent__c = 0;
+				CLR.SubC4i__Position_Based_Attribution_Amount__c = 0;
+				CLRmap.put(CLR.Id,CLR);
+
+				//Influence Account Contacts (calc decimal for unique report sum)
+				if(accountTotalContactsMap.containsKey(CLR.SubC4i__Account__c)){
+					CLR.SubC4i__Influence_Account_Contacts__c = accountTotalContactsMap.get(CLR.SubC4i__Account__c);
+				}
+
+				//Collect by Opportunity > Influence Date > List of Closed Loop Report records
+				if(oppInfluenceDateCLRmap.containsKey(CLR.SubC4i__Opportunity__c)){
+					if(oppInfluenceDateCLRmap.get(CLR.SubC4i__Opportunity__c).containsKey(CLR.SubC4i__Influence_Date__c)){
+						oppInfluenceDateCLRmap.get(CLR.SubC4i__Opportunity__c).get(CLR.SubC4i__Influence_Date__c).add(CLR);
+					}
+					else{
+						List<SubC4i__Closed_Loop_Report__c> tempCLRlist = new List<SubC4i__Closed_Loop_Report__c>();
+						tempCLRlist.add(CLR);
+						oppInfluenceDateCLRmap.get(CLR.SubC4i__Opportunity__c).put(CLR.SubC4i__Influence_Date__c,tempCLRlist);
+					}
+				}
+				else{
+					List<SubC4i__Closed_Loop_Report__c> tempCLRlist2 = new List<SubC4i__Closed_Loop_Report__c>();
+					tempCLRlist2.add(CLR);
+					Map<Date,List<SubC4i__Closed_Loop_Report__c>> influenceDateCLRmap = new Map<Date,List<SubC4i__Closed_Loop_Report__c>>();
+					influenceDateCLRmap.put(CLR.SubC4i__Influence_Date__c,tempCLRlist2);
+					oppInfluenceDateCLRmap.put(CLR.SubC4i__Opportunity__c,influenceDateCLRmap);
+				}
+
+				//Collect by Opportunity > List of All Influence Dates
+				if(oppInfluenceDateMap.containsKey(CLR.SubC4i__Opportunity__c)){
+					oppInfluenceDateMap.get(CLR.SubC4i__Opportunity__c).add(CLR.SubC4i__Influence_Date__c);
+				}
+				else{
+					List<Date> influenceDateList = new List<Date>();
+					influenceDateList.add(CLR.SubC4i__Influence_Date__c);
+					oppInfluenceDateMap.put(CLR.SubC4i__Opportunity__c,influenceDateList);
+				}
+
+				//Collect by Opportunity > List of Before Opp Influence Dates
+				if(CLR.SubC4i__Influence_Date__c < CLR.SubC4i__Opportunity__r.CreatedDate.date()){
+					if(beforeOppInfluenceDateMap.containsKey(CLR.SubC4i__Opportunity__c)){
+						beforeOppInfluenceDateMap.get(CLR.SubC4i__Opportunity__c).add(CLR.SubC4i__Influence_Date__c);
+					}
+					else{
+						List<Date> influenceBeforeDateList = new List<Date>();
+						influenceBeforeDateList.add(CLR.SubC4i__Influence_Date__c);
+						beforeOppInfluenceDateMap.put(CLR.SubC4i__Opportunity__c, influenceBeforeDateList);
+					}
+				}
+				
+				//Collect by Opportunity > List of Closed Loop Report records
+				if(oppCLRmap.containsKey(CLR.SubC4i__Opportunity__c)){
+					oppCLRmap.get(CLR.SubC4i__Opportunity__c).add(CLR);
+				}
+				else{
+					List<SubC4i__Closed_Loop_Report__c> oppCLRList = new List<SubC4i__Closed_Loop_Report__c>();
+					oppCLRList.add(CLR);
+					oppCLRmap.put(CLR.SubC4i__Opportunity__c,oppCLRList);
+				}
+			}
+
+			//Process Opportunities
+			for(Id oId: oppIds){
+				Opportunity opp = oppMap.get(oId);
+
+				//Get Opportunity Amount OR Default to 0 if null
+				Decimal oppTotalAmount = null;
+				if((Decimal)opp.get(CLSoppAmount) != null){
+					oppTotalAmount = (Decimal)opp.get(CLSoppAmount);
+				}
+				else{
+					oppTotalAmount = 0;
+				}
+
+				//First Influence Date
+				Date firstDate = null;
+				Integer firstRecordCount = 1;
+
+				//Last Influence Dates
+				Date lastBeforeOppDate = null;
+				Date lastBeforeCloseDate = null;
+
+				/* Equal Attribution, Opportunity Amount, & Influence Opportunity Count */
+				if(oppCLRmap.containsKey(oId)){
+					for(SubC4i__Closed_Loop_Report__c CLR: oppCLRmap.get(oId)){
+						Integer recordCount = oppCLRmap.get(oId).size();
+						//Influence Opportunity Count (used to get unique count of Marketing Influenced Opportunities)
+						Decimal oneOpp = 1;
+						Decimal recordCountDecimal = decimal.valueOf(string.valueOf(recordCount));
+						Decimal influenceOppCount = oneOpp/recordCountDecimal;
+						CLR.SubC4i__Influence_Opportunity_Count__c = influenceOppCount;
+						//Equal Attribution & Opportunity Amount
+						Decimal equalAttributionTotal = 0;
+						if(oppTotalAmount > 0 && recordCount > 0){
+							equalAttributionTotal = oppTotalAmount/recordCount;
+						}
+						CLR.SubC4i__Equal_Attribution_Amount__c = equalAttributionTotal;
+						CLR.SubC4i__Equal_Attribution_Percent__c = 100/recordCount;
+						CLR.SubC4i__Opportunity_Amount__c = equalAttributionTotal;
+					}
+				}
+
+				//First Touch to Opportunity Close
+				if(oppInfluenceDateMap.containsKey(oId)){
+					oppInfluenceDateMap.get(oId).sort();
+
+					/* First Attribution & Position Based First Touch */
+					firstDate = oppInfluenceDateMap.get(oId).get(0);
+					if(firstDate != null){
+						for(SubC4i__Closed_Loop_Report__c CLR: oppInfluenceDateCLRmap.get(oId).get(firstDate)){
+							firstRecordCount = oppInfluenceDateCLRmap.get(oId).get(firstDate).size();
+							CLR.SubC4i__Influence_Order__c = 'First';
+							CLR.SubC4i__First_Attribution__c = oppTotalAmount/firstRecordCount;
+							firstCLRIds.add(CLR.Id);
+							//Position Based - First Touch
+							CLR.SubC4i__Position_Based_Attribution_Amount__c = (oppTotalAmount * 0.40)/firstRecordCount;
+							CLR.SubC4i__Position_Based_Attribution_Percent__c = 40/firstRecordCount;
+						}
+					}
+
+					/* Last Before Close Attribution & Position Based Last touch */
+					Integer listEndNum = oppInfluenceDateMap.get(oId).size() - 1;
+					lastBeforeCloseDate = oppInfluenceDateMap.get(oId).get(listEndNum);
+					if(lastBeforeCloseDate != null){
+						for(SubC4i__Closed_Loop_Report__c CLR: oppInfluenceDateCLRmap.get(oId).get(lastBeforeCloseDate)){
+							Integer recordCount = oppInfluenceDateCLRmap.get(oId).get(lastBeforeCloseDate).size();
+							//Last Before Close Attribution
+							CLR.SubC4i__Influence_Order__c = 'Last Before Close';
+							CLR.SubC4i__Last_Before_Close_Attribution__c = oppTotalAmount/recordCount;
+							//Position Based - Last Touch
+							CLR.SubC4i__Position_Based_Attribution_Amount__c = (oppTotalAmount * 0.40)/recordCount;
+							CLR.SubC4i__Position_Based_Attribution_Percent__c = 40/recordCount;
+							//Only one touch for Opportunity (Both First and Last)
+							if(firstCLRIds.contains(CLR.Id)){
+								String influenceOrder = 'First' + '; ' + 'Last Before Close';
+								CLR.SubC4i__Influence_Order__c = influenceOrder;
+							}
+							else{
+								CLR.SubC4i__Influence_Order__c = 'Last Before Close';
+							}
+						}
+					}
+
+					/* Position Based Attribution - Middle Dates */
+					List<SubC4i__Closed_Loop_Report__c> middleCLRlist = new List<SubC4i__Closed_Loop_Report__c>();
+					//Collect Only Middle Date Touches (Exclude First and Last)
+					for(SubC4i__Closed_Loop_Report__c CLR: oppCLRmap.get(oId)){
+						if(CLR.SubC4i__Influence_Date__c != firstDate && CLR.SubC4i__Influence_Date__c != lastBeforeCloseDate){
+							middleCLRlist.add(CLR);
+						}
+					}
+					//Calculate Metrics for Middle Dates
+					if(middleCLRlist.size() > 0){
+						Integer centerListSize = middleCLRlist.size();
+						Decimal centerRecordCount = decimal.valueOf(string.valueOf(centerListSize));
+						Decimal positionPercent = 20/centerRecordCount;
+						Decimal positionAmount = (0.20/centerListSize) * oppTotalAmount;
+						for(SubC4i__Closed_Loop_Report__c CLR: middleCLRlist){
+							CLR.SubC4i__Position_Based_Attribution_Percent__c = positionPercent;
+							CLR.SubC4i__Position_Based_Attribution_Amount__c = positionAmount;
+						}
+					}
+				}
+
+				//First Touch to Opportunity Creation
+				if(beforeOppInfluenceDateMap.containsKey(oId)){
+					beforeOppInfluenceDateMap.get(oId).sort();
+
+					/* Last Before Opp Attribution */
+					Integer listEndNum = beforeOppInfluenceDateMap.get(oId).size() - 1;
+					lastBeforeOppDate = beforeOppInfluenceDateMap.get(oId).get(listEndNum);
+					if(lastBeforeOppDate != null){
+						for(SubC4i__Closed_Loop_Report__c CLR: oppInfluenceDateCLRmap.get(oId).get(lastBeforeOppDate)){
+							Integer recordCount = oppInfluenceDateCLRmap.get(oId).get(lastBeforeOppDate).size();
+							//Last Before Opp Attribution
+							CLR.SubC4i__Last_Before_Opp_Attribution__c = oppTotalAmount/recordCount;
+							if(CLR.SubC4i__Influence_Order__c == null){
+								CLR.SubC4i__Influence_Order__c = 'Last Before Opp';
+							}
+							else{
+								String influenceOrder = CLR.SubC4i__Influence_Order__c + '; ' + 'Last Before Opp';
+								CLR.SubC4i__Influence_Order__c = influenceOrder;
+							}
+						}
+					}
+				}
+
+				//First Attribution-To-Opp/Close Days
+				if(firstCLRIds.size() > 0 ){
+					for(Id firstId: firstCLRIds){
+						SubC4i__Closed_Loop_Report__c firstCLR = CLRmap.get(firstId);
+						//First Attribution-To-Opp Days (Last Before Opp Days)
+						Decimal lastBeforeOppNum = decimal.valueOf(string.valueOf(firstCLR.SubC4i__Influence_Date__c.daysBetween(opp.CreatedDate.date())));
+						if(lastBeforeOppNum >= 0){
+							firstCLR.SubC4i__First_Attribution_To_Opp_Days__c = lastBeforeOppNum;
+							firstCLR.SubC4i__First_Attribution_To_Opp_Days_CalcOnly__c = lastBeforeOppNum/firstRecordCount;
+						}
+						else{
+							firstCLR.SubC4i__First_Attribution_To_Opp_Days__c = null;
+							firstCLR.SubC4i__First_Attribution_To_Opp_Days_CalcOnly__c = null;
+						}
+						//First Attribution-To-Close Days (Last Before Close Days)
+						Decimal lastBeforeCloseNum = decimal.valueOf(string.valueOf(firstCLR.SubC4i__Influence_Date__c.daysBetween(opp.CloseDate)));
+						if(lastBeforeCloseNum >= 0){
+							firstCLR.SubC4i__First_Attribution_To_Close_Days__c = lastBeforeCloseNum;
+							firstCLR.SubC4i__First_Attribution_To_Close_Days_CalcOnly__c = lastBeforeCloseNum/firstRecordCount;
+						}
+						else{
+							firstCLR.SubC4i__First_Attribution_To_Close_Days__c = null;
+							firstCLR.SubC4i__First_Attribution_To_Close_Days_CalcOnly__c = null;
+						}
+					}
+					//Reset firstCLRIds for next Opp in loop iteration
+					firstCLRIds.clear();
+				}
+			}
+			//Update Closed Loop Report
+			if(oppCLRmap.size() > 0){
+				update CLRmap.values();
+			}
+		}
+		else{
+			system.debug('Current user does not have necessary permissions.');
+			return;
+		}
+	}
+}

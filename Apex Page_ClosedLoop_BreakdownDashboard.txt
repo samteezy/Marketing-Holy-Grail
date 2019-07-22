@@ -1,0 +1,11 @@
+<apex:page title="Breakdown Dashboard" showHeader="false" sidebar="false" controller="SubC4i.ClosedLoop_BreakdownDashboardController" action="{!forwardToBreakdown}">
+<!-- 
+ Apex Page: ClosedLoop_BreakdownDashboard
+ Description: 
+	- Forward to Closed Loop Breakdown dashboard
+ Created By: Matthew McEachern
+ Created Date: 1/13/2017
+ Last Modified By: Matthew McEachern
+ Last Modified: 1/14/2017
+ -->
+</apex:page>

@@ -1,0 +1,28 @@
+/*
+* Apex Class: ClosedLoop_OverviewDashboardController
+* Description: 
+	- Apex controller for ClosedLoop_OverviewDashboard page
+* Created By: Matthew McEachern
+* Created Date: 1/13/2017
+* Last Modified By: Matthew McEachern
+* Last Modified: 3/3/2017
+*/
+
+public with sharing class ClosedLoop_OverviewDashboardController {
+	public ClosedLoop_OverviewDashboardController(){}
+
+	public PageReference forwardToOverview(){
+		Id overviewDashboardId = null;
+		List<Dashboard> dashboardList = new List<Dashboard>([SELECT Id, DeveloperName, NamespacePrefix FROM Dashboard WHERE DeveloperName LIKE '%Closed_Loop_Overview%' AND NamespacePrefix =:'SubC4i' LIMIT 1]);
+		if(dashboardList.size() > 0){
+			overviewDashboardId = dashboardList.get(0).Id;
+		}
+		if(overviewDashboardId != null){
+			PageReference overviewDashboardURL = new PageReference('/' + overviewDashboardId);
+			return overviewDashboardURL;
+		}
+		else{
+			return null;
+		}
+	}
+}

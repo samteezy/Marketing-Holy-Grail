@@ -1,0 +1,185 @@
+<apex:page title="Documentation" showHeader="true" sidebar="false">
+<!-- 
+ Apex Page: ClosedLoop_Documentation
+ Description: 
+	- Documentation page for Marketing Holy Grail (closed loop reporting)
+ Created By: Matthew McEachern
+ Created Date: 1/13/2017
+ Last Modified By: Matthew McEachern
+ Last Modified: 6/7/2017
+ -->
+	<apex:form >
+		<center><apex:image url="{!$Resource.Marketing_Holy_Grail_Logo}" width="10%" height="10%"/></center>
+		<br/>
+		<center><apex:outputText value="Closed Loop Reporting Application" style="font-style: italic; font-weight: bold; font-size: 18px"/></center>
+		<center><apex:outputText value="by Matthew McEachern" style="font-style: italic; font-weight: bold; font-size: 16px"/></center>
+		<br/>
+		<!-- Description -->
+		<table>
+			<tr>
+				<th>Description</th>
+			</tr>
+			<td>
+				The Marketing Holy Grail is a natively written Salesforce.com app that produces closed loop reports for your organization.  This is the Campaign Influence for Salesforce you've been waiting for!  It allows you to quantify marketing’s influence over sales.  Data is collected using an Account-Based Attribution model, which means you no longer have to depend on contacts being directly associated to an opportunity.  Customize all major data points to guarantee the results match your business.  The application is specifically designed to work with both standard and custom fields.
+				<br/><br/>
+				If you decide to change the report settings midstream, simply update the program settings and click to refresh your data.  The report data is rebuilt from scratch each time you run the program.  This ensures data accuracy and guarantees that activities such as field updates and duplicate record merging do not affect your results.
+			</td>
+		</table>
+		<br/>
+		<!-- Getting Started -->
+		<table>
+			<tr>
+				<th>Getting Started</th>
+			</tr>
+			<tr>
+				<td>
+					<ol>
+						<li>Using the App Menu, open the “Marketing Holy Grail”</li>
+						<li>Navigate to the “Settings” tab, from here you can customize app settings to select the fields used in your reports and dashboards.  The settings will work with both standard and custom fields</li>
+						<li>At the top of the “Settings” section, click the “Edit” button and fill out the settings.  Refer to the next section in this documentation, “Settings”, for details on each field needed to complete the setup.  If you are not familiar with the fields in your Salesforce.com instance, please contact your system administrator for assistance</li>
+						<li>While still under the "Settings" tab, go to the “Refresh Data” section and input the date range for your reporting time frame.  Click “Start Refresh” to begin processing the data.  You will receive an email when the refresh is complete.  The wait time will depend on how much data is captured within your chosen time frame.</li>
+						<li>Open the tabs "Overview Dashboard" and "Breakdown Overview" to view your dashboards.  Don’t forget to click the “Refresh” button on each dashboard before viewing the data</li>
+					</ol>
+				</td>
+			</tr>
+		</table>
+		<!-- Reporting Scope -->
+		<table>
+			<tr>
+				<th>Reporting Scope</th>
+			</tr>
+			<tr>
+				<td><center><apex:image url="{!$Resource.Reporting_Scope_Diagram}" width="60%" height="60%"/></center></td>
+			</tr>
+		</table>
+		<!-- Settings -->
+		<table>
+			<tr>
+				<th>Settings</th>
+			</tr>
+				<td>Attribution only takes place during the influence timeframe that you choose.  All campaign activity is associated to opportunities when the Campaign Member Responded Date falls within X months prior to the Opportunity Created Date and ends on the Opportunity Close Date.  The Opportunity Close Date is not considered final until the Opportunity is closed.  i.e. Open Opportunities will attribute all related campaign influence that occurs after the Opportunity Created Date.  When an Opportunity is closed, the campaign influence that took place after the Close Date will no longer be included.  Always use the “Start Refresh” button to ensure you are viewing the most accurate data.</td>
+			<!-- Influence Date -->
+			<tr>
+				<td>
+					<b>Influence Date</b><br/>
+					The date field on the Campaign Member object to use in the report. This can be the standard field, FirstRespondedDate, or any custom date field on that object.
+				</td>
+			</tr>
+			<!-- Influence Look-Back -->
+			<tr>
+				<td>
+					<b>Influence Look-Back (# of Months)</b><br/>
+					The starting point of your campaign influence. Input the number of months prior to the Opportunity Created Date to attribute campaign activity. The influence time frame will begin X months before Opportunity Created Date and end at the Opportunity Close Date.
+				</td>
+			</tr>
+			<!-- Opportunity Amount -->
+			<tr>
+				<td>
+					<b>Opportunity Amount</b><br/>
+					The currency field on the Opportunity object to use in the report. This can be the standard field, Amount, or any custom field, including any roll-up summary field.
+				</td>
+			</tr>
+			<!-- Report Time Frame -->
+			<tr>
+				<td>
+					<b>Report Time Frame</b><br/>
+					The time frame for the data that will be included in the closed loop reports. Based on Opportunity Close Date.  Input the start date (From:) and end date (To:) to process data for the reports and dashboards.
+				</td>
+			</tr>
+			<!-- Start Refresh -->
+			<tr>
+				<td>
+					<b>Start Refresh</b><br/>
+					Click the “Start Refresh button whenever you want to view the latest results on your reports and dashboards.
+				</td>
+			</tr>
+		</table>
+		<br/>
+		<!-- Required Permissions -->
+		<table>
+			<tr>
+				<th>Required Permissions</th>
+			</tr>
+		</table>
+		<table>
+			<tr>
+				<td><b>Closed Loop Report (SObject)</b></td>
+				<td><b>Closed Loop Settings (SObject)</b></td>
+				<td><b>Visualforce Page Access</b></td>
+				<td><b>Apex Class Access</b></td>
+				<td><b>Report Folders</b></td>
+			</tr>
+			<tr>
+				<td valign="top">
+					<ul style="list-style-type:square">
+						<li>Object Permissions: Read/Create/Edit/Delete</li>
+						<li>Field Permissions: All Fields</li>
+					</ul>
+				</td>
+				<td valign="top">
+					<ul style="list-style-type:square">
+						<li>Object Permissions: Read/Create/Edit/Delete</li>
+						<li>Field Permissions: All Fields</li>
+					</ul>
+				</td>
+				<td valign="top">
+					<ul style="list-style-type:square">
+						<li>SubC4i.ClosedLoop_AttributionDashboard</li>
+						<li>SubC4i.ClosedLoop_Documentation</li>
+						<li>SubC4i.ClosedLoop_OverviewDashboard</li>
+						<li>SubC4i.ClosedLoop_SettingsPage</li>
+						<li>SubC4i.ClosedLoop_VelocityDashboard</li>
+					</ul>
+				</td>
+				<td valign="top">
+					<ul style="list-style-type:square">
+						<li>SubC4i.ClosedLoop_AttributionDashController</li>
+						<li>SubC4i.ClosedLoop_Clean</li>
+						<li>SubC4i.ClosedLoop_Metrics</li>
+						<li>SubC4i.ClosedLoop_OverviewDashboardController</li>
+						<li>SubC4i.ClosedLoop_Refresh</li>
+						<li>SubC4i.ClosedLoop_Security</li>
+						<li>SubC4i.ClosedLoop_Settings</li>
+						<li>SubC4i.ClosedLoop_SettingsPageController</li>
+						<li>SubC4i.ClosedLoop_Test</li>
+						<li>SubC4i.ClosedLoop_TestUtility</li>
+						<li>SubC4i.ClosedLoop_VelocityDashController</li>
+					</ul>
+				</td>
+				<td valign="top">
+					<ul style="list-style-type:square">
+						<li>Closed Loop Reports</li>
+						<li>Closed Loop Dashboards</li>
+					</ul>
+				</td>
+			</tr>
+		</table>
+	</apex:form>
+	<!-- CSS -->
+	<style>
+		table {
+			font-family: arial, sans-serif;
+			border-collapse: collapse;
+			width: 100%;
+		}
+		th {
+			text-align: left;
+			padding: 8px;
+			background-color: #bbd9fc;
+			color: black;
+			font-size: 14px;
+		}
+		td{
+			text-align: left;
+			padding: 8px;
+			font-size: 12px;
+		}
+		ol{
+			padding: 0px;
+		}
+		li{
+			padding: 0px;
+			margin: 14px;
+		}
+	</style>
+</apex:page>

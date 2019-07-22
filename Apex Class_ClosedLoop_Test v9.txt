@@ -1,0 +1,280 @@
+/*
+* Apex Class: ClosedLoop_Test
+* Description: 
+	- Test class for Closed Loop Report
+* Created By: Matthew McEachern
+* Created Date: 11/18/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 3/9/2017
+*/
+
+@isTest
+private class ClosedLoop_Test {
+
+	static testMethod void testSettingsPage(){
+		//Setup controller
+		SubC4i.ClosedLoop_SettingsPageController settingsController = new SubC4i.ClosedLoop_SettingsPageController();
+		settingsController.getSettings();
+		settingsController.getObjectFields();
+		
+		test.startTest();
+			//Refresh w/Setup Missing
+			settingsController.refreshCLR();
+			//Required Fields
+			settingsController.SaveCLS();
+			//Edit and Cancel Buttons
+			settingsController.customEditMainSettings();
+			settingsController.customCancel();
+			//Non-Existent Fields
+			settingsController.selectedCampMemberField = 'SubC4i_FakeInfluenceDate__c';
+			settingsController.influenceStart = 12;
+			settingsController.selectedOppField = 'SubC4i_FakeOppAmount__c';
+			settingsController.SaveCLS();
+			//Wrong Data Type
+			settingsController.selectedCampMemberField = 'ContactId';
+			settingsController.influenceStart = 12;
+			settingsController.selectedOppField = 'AccountId';
+			settingsController.SaveCLS();
+			//Successful Save
+			settingsController.selectedCampMemberField = 'FirstRespondedDate';
+			settingsController.influenceStart = 12;
+			settingsController.selectedOppField = 'Amount';
+			settingsController.SaveCLS();
+			//Extra Save w/No Changes
+			settingsController.SaveCLS();
+			//Update Existing Closed Loop Settings
+			settingsController.influenceStart = 6;
+			settingsController.SaveCLS();
+			//Render Last Data Refresh Completed
+			SubC4i__Closed_Loop_Setting__c CLS = [SELECT Id, SubC4i__Active__c, SubC4i__Last_Data_Refresh_Completed__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true LIMIT 1];
+			CLS.SubC4i__Last_Data_Refresh_Completed__c = datetime.now();
+			update CLS;
+			settingsController.getSettings();
+			settingsController.customCancel();
+			//Refresh w/Report Start and End missing
+			settingsController.refreshCLR();
+		test.stopTest();
+
+		//Test Assertion
+		List<SubC4i__Closed_Loop_Setting__c> activeCLSlist = new List<SubC4i__Closed_Loop_Setting__c>([SELECT SubC4i__Active__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true]);
+		system.assertEquals(1, activeCLSlist.size());
+	}
+
+	static testMethod void testRefresh(){
+		//Closed Loop Settings
+		SubC4i__Closed_Loop_Setting__c CLS = SubC4i.ClosedLoop_TestUtility.createCLS(true);
+		
+		//Campaigns
+		Campaign camp1 = SubC4i.ClosedLoop_TestUtility.createCampaign();
+		Campaign camp2 = SubC4i.ClosedLoop_TestUtility.createCampaign();
+
+		//Product
+		PricebookEntry pbe = SubC4i.ClosedLoop_TestUtility.createPricebookEntry();
+
+		//Account 1
+		Account a1 = SubC4i.ClosedLoop_TestUtility.createAccount();
+		Contact c1_a1 = SubC4i.ClosedLoop_TestUtility.createContact(a1.Id);
+		Contact c2_a1 = SubC4i.ClosedLoop_TestUtility.createContact(a1.Id);
+		Contact c3_a1 = SubC4i.ClosedLoop_TestUtility.createContact(a1.Id);
+		Contact c4_a1 = SubC4i.ClosedLoop_TestUtility.createContact(a1.Id);
+		Opportunity o1_a1 = SubC4i.ClosedLoop_TestUtility.createOpp(a1.Id);
+		Opportunity o2_a1 = SubC4i.ClosedLoop_TestUtility.createOpp(a1.Id);
+		o1_a1.StageName = SubC4i.ClosedLoop_TestUtility.getClosedWonStage();
+		update o1_a1;
+		o2_a1.StageName = SubC4i.ClosedLoop_TestUtility.getClosedLostStage();
+		update o2_a1;
+		OpportunityLineItem oli1_a1 = SubC4i.ClosedLoop_TestUtility.createOppLineItem(o1_a1, pbe, 1);
+		OpportunityLineItem oli2_a1 = SubC4i.ClosedLoop_TestUtility.createOppLineItem(o2_a1, pbe, 1);
+		CampaignMember cm1_a1 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c1_a1.Id, 'Responded', date.today().addDays(-10));
+		CampaignMember cm2_a1 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c2_a1.Id, 'Responded', date.today().addDays(-5));
+		CampaignMember cm3_a1 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c1_a1.Id, 'Responded', date.today().addDays(-10));
+		CampaignMember cm4_a1 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c2_a1.Id, 'Responded', date.today().addDays(-5));
+		CampaignMember cm5_a1 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c3_a1.Id, 'Responded', date.today().addDays(-5));
+		SubC4i__Closed_Loop_Report__c CLR1 = SubC4i.ClosedLoop_TestUtility.createCLR(a1.Id, c1_a1.Id, camp1.Id, cm1_a1.Id, o1_a1.Id, date.today().addDays(-10));
+		SubC4i__Closed_Loop_Report__c CLR2 = SubC4i.ClosedLoop_TestUtility.createCLR(a1.Id, c2_a1.Id, camp1.Id, cm2_a1.Id, o1_a1.Id, date.today().addDays(-5));
+		SubC4i__Closed_Loop_Report__c CLR3 = SubC4i.ClosedLoop_TestUtility.createCLR(a1.Id, c1_a1.Id, camp2.Id, cm3_a1.Id, o2_a1.Id, date.today().addDays(-10));
+		SubC4i__Closed_Loop_Report__c CLR4 = SubC4i.ClosedLoop_TestUtility.createCLR(a1.Id, c2_a1.Id, camp2.Id, cm4_a1.Id, o2_a1.Id, date.today().addDays(-5));
+		SubC4i__Closed_Loop_Report__c CLR5 = SubC4i.ClosedLoop_TestUtility.createCLR(a1.Id, c3_a1.Id, camp2.Id, cm5_a1.Id, o2_a1.Id, date.today().addDays(-5));
+
+		//Account 2
+		Account a2 = SubC4i.ClosedLoop_TestUtility.createAccount();
+		Contact c1_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Contact c2_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Contact c3_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Contact c4_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Contact c5_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Contact c6_a2 = SubC4i.ClosedLoop_TestUtility.createContact(a2.Id);
+		Opportunity o1_a2 = SubC4i.ClosedLoop_TestUtility.createOpp(a2.Id);
+		Opportunity o2_a2 = SubC4i.ClosedLoop_TestUtility.createOpp(a2.Id);
+		OpportunityLineItem oli1_a2 = SubC4i.ClosedLoop_TestUtility.createOppLineItem(o1_a2, pbe, 1);
+		OpportunityLineItem oli2_a2 = SubC4i.ClosedLoop_TestUtility.createOppLineItem(o2_a2, pbe, 1);
+		CampaignMember cm1_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c1_a2.Id, 'Responded', date.today().addDays(-14));
+		CampaignMember cm2_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c2_a2.Id, 'Responded', date.today().addDays(-14));
+		CampaignMember cm3_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c3_a2.Id, 'Responded', date.today().addDays(-7));
+		CampaignMember cm4_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c4_a2.Id, 'Responded', date.today().addDays(-7));
+		CampaignMember cm5_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c5_a2.Id, 'Responded', date.today().addDays(-2));
+		CampaignMember cm6_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c6_a2.Id, 'Responded', date.today().addDays(2));
+		CampaignMember cm7_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c1_a2.Id, 'Responded', date.today().addDays(7));
+		CampaignMember cm8_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c2_a2.Id, 'Responded', date.today().addDays(7));
+		CampaignMember cm9_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c3_a2.Id, 'Responded', date.today().addDays(14));
+		CampaignMember cm10_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c4_a2.Id, 'Responded', date.today().addDays(14));
+		CampaignMember cm11_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c5_a2.Id, 'Responded', date.today().addDays(-10));
+		CampaignMember cm12_a2 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp2.Id, c6_a2.Id, 'Responded', date.today().addDays(-10));
+		SubC4i__Closed_Loop_Report__c CLR6 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c1_a2.Id, camp1.Id, cm1_a2.Id, o1_a2.Id, date.today().addDays(-14));
+		SubC4i__Closed_Loop_Report__c CLR7 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c2_a2.Id, camp1.Id, cm2_a2.Id, o1_a2.Id, date.today().addDays(-14));
+		SubC4i__Closed_Loop_Report__c CLR8 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c3_a2.Id, camp1.Id, cm3_a2.Id, o1_a2.Id, date.today().addDays(-7));
+		SubC4i__Closed_Loop_Report__c CLR9 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c4_a2.Id, camp1.Id, cm4_a2.Id, o1_a2.Id, date.today().addDays(-7));
+		SubC4i__Closed_Loop_Report__c CLR10 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c5_a2.Id, camp1.Id, cm5_a2.Id, o1_a2.Id, date.today().addDays(-2));
+		SubC4i__Closed_Loop_Report__c CLR11 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c6_a2.Id, camp1.Id, cm6_a2.Id, o1_a2.Id, date.today().addDays(2));
+		SubC4i__Closed_Loop_Report__c CLR12 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c1_a2.Id, camp2.Id, cm7_a2.Id, o1_a2.Id, date.today().addDays(7));
+		SubC4i__Closed_Loop_Report__c CLR13 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c2_a2.Id, camp2.Id, cm8_a2.Id, o1_a2.Id, date.today().addDays(7));
+		SubC4i__Closed_Loop_Report__c CLR14 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c3_a2.Id, camp2.Id, cm9_a2.Id, o1_a2.Id, date.today().addDays(14));
+		SubC4i__Closed_Loop_Report__c CLR15 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c4_a2.Id, camp2.Id, cm10_a2.Id, o1_a2.Id, date.today().addDays(14));
+		SubC4i__Closed_Loop_Report__c CLR16 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c5_a2.Id, camp2.Id, cm11_a2.Id, o2_a2.Id, date.today().addDays(10));
+		SubC4i__Closed_Loop_Report__c CLR17 = SubC4i.ClosedLoop_TestUtility.createCLR(a2.Id, c6_a2.Id, camp2.Id, cm12_a2.Id, o2_a2.Id, date.today().addDays(10));
+
+		//Account 3
+		Account a3 = SubC4i.ClosedLoop_TestUtility.createAccount();
+		Contact c1_a3 = SubC4i.ClosedLoop_TestUtility.createContact(a3.Id);
+		Opportunity o1_a3 = SubC4i.ClosedLoop_TestUtility.createOpp(a3.Id);
+		OpportunityLineItem oli1_a3 = SubC4i.ClosedLoop_TestUtility.createOppLineItem(o1_a3, pbe, 1);
+		CampaignMember cm1_a3 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c1_a3.Id, 'Responded', date.today().addDays(-17));
+
+		//Account 4
+		Account a4 = SubC4i.ClosedLoop_TestUtility.createAccount();
+		Contact c1_a4 = SubC4i.ClosedLoop_TestUtility.createContact(a4.Id);
+		Opportunity o1_a4 = SubC4i.ClosedLoop_TestUtility.createOpp(a4.Id);
+		o1_a4.CloseDate = date.today().addDays(-30);
+		update o1_a4;
+		CampaignMember cm1_a4 = SubC4i.ClosedLoop_TestUtility.createCampaignMember(camp1.Id, c1_a4.Id, 'Responded', date.today().addDays(7));
+		
+		//Basic Opportunity
+		Account a = SubC4i.ClosedLoop_TestUtility.createAccount();
+		Opportunity o = SubC4i.ClosedLoop_TestUtility.createOpp(a.Id);
+		update o;
+
+		//Setup controller
+		SubC4i.ClosedLoop_SettingsPageController settingsController = new SubC4i.ClosedLoop_SettingsPageController();
+		
+		test.startTest();
+			settingsController.refreshCLR();
+		test.stopTest();
+
+		//Test Assertions
+		List<SubC4i__Closed_Loop_Report__c> CLRlist = new List<SubC4i__Closed_Loop_Report__c>([SELECT Id FROM SubC4i__Closed_Loop_Report__c]);
+		system.assert(CLRlist.size() > 0);
+	}
+
+	static testMethod void testSettings(){
+		//Validation Rule - Insert Additional Active Record
+		SubC4i__Closed_Loop_Setting__c CLS = SubC4i.ClosedLoop_TestUtility.createCLS(true);
+		try{
+			SubC4i__Closed_Loop_Setting__c CLS2 = SubC4i.ClosedLoop_TestUtility.createCLS(true);
+		}
+		catch(Exception e){
+			system.debug('Hello IT, have you tried turning it off and on again?');
+		}
+		//Validation Rule - Update Additional Active Record
+		SubC4i__Closed_Loop_Setting__c CLS3 = SubC4i.ClosedLoop_TestUtility.createCLS(false);
+		try{
+			CLS3.SubC4i__Active__c = true;
+			update CLS3;
+		}
+		catch(Exception e){
+			system.debug('Did you see that ludicrous display last night?');
+		}
+
+		//Test Assertions
+		List<SubC4i__Closed_Loop_Setting__c> activeCLSlist = new List<SubC4i__Closed_Loop_Setting__c>([SELECT SubC4i__Active__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true]);
+		system.assertEquals(1, activeCLSlist.size());
+	}
+
+	static testMethod void testJobLimit(){
+		//Closed Loop Settings
+		SubC4i__Closed_Loop_Setting__c CLS = SubC4i.ClosedLoop_TestUtility.createCLS(true);
+
+		//Setup controller
+		SubC4i.ClosedLoop_SettingsPageController settingsController = new SubC4i.ClosedLoop_SettingsPageController();
+		
+		//Set running jobs for testing
+		SubC4i.ClosedLoop_SettingsPageController.runningJobCount = 5;
+
+		test.startTest();
+			settingsController.refreshCLR();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertEquals(true, ApexPages.hasMessages());
+		List<ApexPages.Message> pageMessageList = ApexPages.getMessages();
+		Boolean jobLimitMessage = false;
+		for(ApexPages.Message msg: pageMessageList){
+			if(msg.getDetail().contains('System is currently busy and cannot start the refresh')){
+				jobLimitMessage = true;
+			}
+		}
+		system.assert(jobLimitMessage = true);
+	}
+
+	@isTest(SeeAllData='true')
+	static void testOverviewPage(){
+		test.startTest();
+			SubC4i.ClosedLoop_OverviewDashboardController overviewController = new ClosedLoop_OverviewDashboardController();
+			overviewController.forwardToOverview();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertNotEquals(overviewController.forwardToOverview(), null);
+	}
+
+	static testMethod void testOverviewPage_Missing(){
+		test.startTest();
+			SubC4i.ClosedLoop_OverviewDashboardController overviewController = new ClosedLoop_OverviewDashboardController();
+			overviewController.forwardToOverview();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertEquals(null, overviewController.forwardToOverview());
+	}
+
+	@isTest(SeeAllData='true')
+	static void testAttributionPage(){
+		test.startTest();
+			SubC4i.ClosedLoop_AttributionDashController attributionController = new SubC4i.ClosedLoop_AttributionDashController();
+			attributionController.forwardToAttribution();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertNotEquals(null, attributionController.forwardToAttribution());
+	}
+
+	static testMethod void testAttributionPage_Missing(){
+		test.startTest();
+			SubC4i.ClosedLoop_AttributionDashController attributionController = new SubC4i.ClosedLoop_AttributionDashController();
+			attributionController.forwardToAttribution();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertEquals(null, attributionController.forwardToAttribution());
+	}
+
+	@isTest(SeeAllData='true')
+	static void testVelocityPage(){
+		test.startTest();
+			SubC4i.ClosedLoop_VelocityDashController velocityController = new SubC4i.ClosedLoop_VelocityDashController();
+			velocityController.forwardToVelocity();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertNotEquals(null, velocityController.forwardToVelocity());
+	}
+
+	static testMethod void testVelocityPage_Missing(){
+		test.startTest();
+			SubC4i.ClosedLoop_VelocityDashController velocityController = new SubC4i.ClosedLoop_VelocityDashController();
+			velocityController.forwardToVelocity();
+		test.stopTest();
+
+		//Test Assertions
+		system.assertEquals(null, velocityController.forwardToVelocity());
+	}
+}

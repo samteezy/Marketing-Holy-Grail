@@ -1,0 +1,11 @@
+<apex:page title="Attribution Dashboard" showHeader="false" sidebar="false" controller="SubC4i.ClosedLoop_AttributionDashController" action="{!forwardToAttribution}">
+<!-- 
+ Apex Page: ClosedLoop_AttributionDashboard
+ Description: 
+	- Forward to Closed Loop Attribution dashboard
+ Created By: Matthew McEachern
+ Created Date: 2/14/2017
+ Last Modified By: Matthew McEachern
+ Last Modified: 2/14/2017
+ -->
+</apex:page>

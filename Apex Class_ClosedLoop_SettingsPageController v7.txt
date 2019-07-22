@@ -1,0 +1,370 @@
+/*
+* Apex Class: ClosedLoop_SettingsPageController
+* Description: 
+	- Apex controller for ClosedLoop_SettingsPage
+* Created By: Matthew McEachern
+* Created Date: 11/7/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/24/2017
+*/
+
+public with sharing class ClosedLoop_SettingsPageController{
+
+	public ClosedLoop_SettingsPageController(){
+		isActive = false;
+		getSettings();
+		getObjectFields();
+	}
+
+	public SubC4i__Closed_Loop_Setting__c CLSsetup {get;set;}
+	public String influenceDate {get;set;}
+	public String influenceDateLabel {get;set;}
+	public Decimal influenceStart {get;set;}
+	public String oppAmount {get;set;}
+	public String oppAmountLabel {get;set;}
+	public Boolean isRefreshDate {get;set;}
+	public Boolean isActive {get;set;}
+	public Boolean editMainSettings {get;set;}
+	public String selectedCampMemberField {get;set;}
+	public String selectedOppField {get;set;}
+	public List<SelectOption> campMemberFieldList {get;set;}
+	public List<SelectOption> oppFieldList {get;set;}
+	public static Integer runningJobCount{
+		get{
+			if(runningJobCount == null){
+				return [SELECT count() FROM AsyncApexJob WHERE JobType = 'BatchApex' AND (Status = 'Queued' OR Status = 'Processing' OR Status = 'Preparing')];
+			}
+			else{
+				return runningJobCount;
+			}
+		}
+		set{
+			System.assert(Test.isRunningTest(),'This property may only be set in tests');
+			runningJobCount = value;
+		}
+	}
+
+	public void getSettings(){
+		if(
+			//Closed Loop Setting - isAccessible
+			ClosedLoop_Security.isAccessibleField('Id','SubC4i__Closed_Loop_Setting__c') &&
+			//Closed Loop Seting - isCreateable
+			ClosedLoop_Security.isCreateableField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c') &&
+			//Closed Loop Seting - isUpdateable
+			ClosedLoop_Security.isUpdateableField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c')){
+			//Get Active Closed Loop Setting
+			List<SubC4i__Closed_Loop_Setting__c> CLSlist = new List<SubC4i__Closed_Loop_Setting__c>([SELECT Id, SubC4i__Active__c, SubC4i__Influence_Date__c, SubC4i__Influence_Start__c, SubC4i__Opportunity_Amount__c, SubC4i__Last_Data_Refresh_Completed__c, SubC4i__Report_Start__c, SubC4i__Report_End__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true LIMIT 1]);
+			//Existing Closed Loop Settings
+			if(CLSlist.size() > 0){
+				//Main Settings
+				CLSsetup = CLSlist.get(0);
+				influenceDate = CLSsetup.SubC4i__Influence_Date__c;
+				influenceStart = CLSsetup.SubC4i__Influence_Start__c;
+				oppAmount = CLSsetup.SubC4i__Opportunity_Amount__c;
+				//Only render Last Data Refresh Completed if populated
+				if(CLSsetup.SubC4i__Last_Data_Refresh_Completed__c != null){
+					isRefreshDate = true;
+				}
+				else{
+					isRefreshDate = false;
+				}
+				isActive = true;
+			}
+			//New Closed Loop Settings
+			else{
+				CLSsetup = new SubC4i__Closed_Loop_Setting__c();
+				CLSsetup.SubC4i__Active__c = true;
+			}
+		}
+		else{
+			ApexPages.Message missingPermissions = new ApexPages.Message(ApexPages.Severity.Error, 'You do not have the necessary permissions to configure the settings.');
+			ApexPages.addMessage(missingPermissions);
+		}
+	}
+
+	public void getObjectFields(){
+		//Influence Date Fields (Campaign Member)
+		campMemberFieldList = new List<SelectOption>();
+		Map<String,Schema.Sobjectfield> campaignMemberFieldMap = new Map<String,Schema.Sobjectfield>(Schema.getGlobalDescribe().get('CampaignMember').getDescribe().fields.getMap());
+		//Set Default Value
+		if(influenceDate != null && campaignMemberFieldMap.containsKey(influenceDate)){
+			influenceDateLabel = string.valueOf(campaignMemberFieldMap.get(influenceDate).getDescribe().getLabel());
+			campMemberFieldList.add(new SelectOption(influenceDate,influenceDateLabel));
+		}
+		else{
+			campMemberFieldList.add(new SelectOption('--None--','--None--'));
+		}
+		//Set Picklist
+		for(String fieldName: campaignMemberFieldMap.keySet()){
+			Schema.Sobjectfield cmField = campaignMemberFieldMap.get(fieldName);
+			String cmFieldType = string.valueOf(cmField.getDescribe().getType());
+			if(((cmFieldType == 'DATE' && influenceDate == null) ||(cmFieldType == 'DATE' && influenceDate != null && fieldName != influenceDate)) && fieldName != 'SubC4i__SubC4i_First_Responded_Date_Custom__c'){
+				String fieldLabel = string.valueOf(campaignMemberFieldMap.get(fieldName).getDescribe().getLabel());
+				campMemberFieldList.add(new SelectOption(fieldName,fieldLabel));
+			}
+		}
+
+		//Opportunity Amount Fields
+		oppFieldList = new List<SelectOption>();
+		Map<String,Schema.Sobjectfield> opportunityFieldMap = new Map<String,Schema.Sobjectfield>(Schema.getGlobalDescribe().get('Opportunity').getDescribe().fields.getMap());
+		//Set Default Value
+		if(oppAmount != null && opportunityFieldMap.containsKey(oppAmount)){
+			oppAmountLabel = string.valueOf(opportunityFieldMap.get(oppAmount).getDescribe().getLabel());
+			oppFieldList.add(new SelectOption(oppAmount,oppAmountLabel));
+		}
+		else{
+			oppFieldList.add(new SelectOption('--None--','--None--'));
+		}
+		//Set Picklist
+		for(String fieldName: opportunityFieldMap.keySet()){
+			Schema.SObjectField oppField = opportunityFieldMap.get(fieldName);
+			String oppFieldType = string.valueOf(oppField.getDescribe().getType());
+			if((oppFieldType == 'CURRENCY' && oppAmount == null) || (oppFieldType == 'CURRENCY' && oppAmount != null && fieldName != oppAmount)){
+				String fieldLabel = string.valueOf(opportunityFieldMap.get(fieldName).getDescribe().getLabel());
+				oppFieldList.add(new SelectOption(fieldName,fieldLabel));
+			}
+		}
+	}
+
+	public Boolean validateDates(){
+		Boolean isValidated = true;
+
+		//Required Fields
+		if(CLSsetup.SubC4i__Report_Start__c == null){
+			ApexPages.Message missingRequired = new ApexPages.Message(ApexPages.Severity.Error, 'Report Time Frame: From Year is required');
+			ApexPages.addMessage(missingRequired);
+			isValidated = false;
+		}
+		if(CLSsetup.SubC4i__Report_End__c == null){
+			ApexPages.Message missingRequired = new ApexPages.Message(ApexPages.Severity.Error, 'Report Time Frame: To Year is required');
+			ApexPages.addMessage(missingRequired);
+			isValidated = false;
+		}
+		return isValidated;
+	}
+
+	public void refreshCLR(){
+		//Only execute batch if current running job limit has not been exceeded
+		if(runningJobCount < 5){
+			//Only run Closed Loop Settings are active
+			if(isActive == true){
+				//Run validations on years
+				if(validateDates() == false){
+					return;
+				}
+				//Update Closed Loop Settings
+				if(ClosedLoop_Security.isUpdateableField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+					ClosedLoop_Security.isUpdateableField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c')){
+					update CLSsetup;
+				}
+				else{
+					ApexPages.Message missingPermissions = new ApexPages.Message(ApexPages.Severity.Error, 'You do not have the necessary permissions to perform this action.');
+					ApexPages.addMessage(missingPermissions);
+				}	
+				//Run Batch
+				SubC4i.ClosedLoop_Clean cleanBatch = new SubC4i.ClosedLoop_Clean();
+				Database.executeBatch(cleanBatch,2000);
+				//Confirmation Message
+				ApexPages.Message confirmRefresh = new ApexPages.Message(ApexPages.Severity.Info, 'Data refresh has been started.  You will receive an email when it is complete.');
+				ApexPages.addMessage(confirmRefresh);
+			}
+			//Closed Loop Settings are missing or inactive
+			else{
+				ApexPages.Message setupMissing = new ApexPages.Message(ApexPages.Severity.Error, 'Settings must be configured before data can be refreshed.  Please complete the setup, then try again to "Start Refresh"');
+				ApexPages.addMessage(setupMissing);
+			}
+		}
+		//Too many batch jobs currently running
+		else{
+			ApexPages.Message systemBusy = new ApexPages.Message(ApexPages.Severity.Error, 'System is currently busy and cannot start the refresh.  Please try again later.');
+			ApexPages.addMessage(systemBusy);
+		}
+	}
+
+	public void trimStringFields(){
+		if(influenceDate != null){
+			influenceDate = influenceDate.trim();
+		}
+		if(oppAmount != null){
+			oppAmount = oppAmount.trim();
+		}
+	}
+
+	public Boolean validateFields(){
+		Boolean isValidated = true;
+
+		//Required Fields
+		if(influenceDate == null || influenceDate == '' || influenceDate == '--None--'){
+			ApexPages.Message missingRequired = new ApexPages.Message(ApexPages.Severity.Error, 'Influence Date is a required field');
+			ApexPages.addMessage(missingRequired);
+			isValidated = false;
+		}
+		if(influenceStart == null || influenceStart == 0){
+			ApexPages.Message missingRequired = new ApexPages.Message(ApexPages.Severity.Error, 'Influence Start is a required field');
+			ApexPages.addMessage(missingRequired);
+			isValidated = false;
+		}
+		if(oppAmount == null || oppAmount == '' || oppAmount == '--None--'){
+			ApexPages.Message missingRequired = new ApexPages.Message(ApexPages.Severity.Error, 'Opportunity Amount is a required field');
+			ApexPages.addMessage(missingRequired);
+			isValidated = false;
+		}
+
+		//Only Check Sobjectfields if they are populated
+		if(isValidated != false){
+			//Opportunity Fields
+			Map<String,Schema.Sobjectfield> opportunityFieldMap = new Map<String,Schema.Sobjectfield>(Schema.getGlobalDescribe().get('Opportunity').getDescribe().fields.getMap());
+			if(!opportunityFieldMap.containsKey(oppAmount)){
+				String message = oppAmount + ' is not a valid Opportunity field';
+				ApexPages.Message fieldNotExist = new ApexPages.Message(ApexPages.Severity.Error, message);
+				ApexPages.addMessage(fieldNotExist);
+				isValidated = false;
+			}
+			else{
+				Schema.SObjectField oppField = opportunityFieldMap.get(oppAmount);
+				String oppFieldType = string.valueOf(oppField.getDescribe().getType());
+				if(oppFieldType != 'CURRENCY'){
+					String message = oppAmount + ' needs to be a currency field';
+					ApexPages.Message wrongDataType = new ApexPages.Message(ApexPages.Severity.Error, message);
+					ApexPages.addMessage(wrongDataType);
+					isValidated = false;
+				}
+			}
+
+			//Campaign Member Fields
+			Map<String,Schema.Sobjectfield> campaignMemberFieldMap = new Map<String,Schema.Sobjectfield>(Schema.getGlobalDescribe().get('CampaignMember').getDescribe().fields.getMap());
+			if(!campaignMemberFieldMap.containsKey(influenceDate)){
+				string message = influenceDate + ' is not a valid Campaign Member field';
+				ApexPages.Message fieldNotExist = new ApexPages.Message(ApexPages.Severity.Error, message);
+				ApexPages.addMessage(fieldNotExist);
+				isValidated = false;
+			}
+			else{
+				Schema.SObjectField cmField = campaignMemberFieldMap.get(influenceDate);
+				String cmFieldType = string.valueOf(cmField.getDescribe().getType());
+				if(cmFieldType != 'DATE'){
+					String message = influenceDate + ' needs to be a currency field';
+					ApexPages.Message wrongDataType = new ApexPages.Message(ApexPages.Severity.Error, message);
+					ApexPages.addMessage(wrongDataType);
+					isValidated = false;
+				}
+			}
+		}
+		return isValidated;
+	}
+
+	public void SaveCLS(){
+		trimStringFields();
+		//Get Selected Values
+		influenceDate = selectedCampMemberField;
+		oppAmount = selectedOppField;
+		//Run Validation Rules
+		if(validateFields() == false){
+			return;
+		}
+		editMainSettings = false;
+		//Update Closed Loop Settings
+		if(isActive == true){
+			//Display Confirmation w/warning of refresh required
+			if(CLSsetup.SubC4i__Influence_Date__c != influenceDate || CLSsetup.SubC4i__Influence_Start__c != influenceStart || CLSsetup.SubC4i__Opportunity_Amount__c != oppAmount){
+				ApexPages.Message confirmSaveUpdate1 = new ApexPages.Message(ApexPages.Severity.Confirm,'Changes saved');
+				ApexPages.Message confirmSaveUpdate2 = new ApexPages.Message(ApexPages.Severity.Warning,'Settings have been updated and you must refresh the data');
+				ApexPages.Message confirmSaveUpdate3 = new ApexPages.Message(ApexPages.Severity.Warning,'Choose your report time frame and click the "Start Refresh" button');
+				ApexPages.addMessage(confirmSaveUpdate1);
+				ApexPages.addMessage(confirmSaveUpdate2);
+				ApexPages.addMessage(confirmSaveUpdate3);
+			}
+			//Display if update did not change existing settings
+			else{
+				ApexPages.Message confirmNoChanges = new ApexPages.Message(ApexPages.Severity.Info,'No changes were made');
+				ApexPages.addMessage(confirmNoChanges);
+			}
+			if(ClosedLoop_Security.isUpdateableField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isUpdateableField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c')){
+				//Update after changes are evaluated
+				CLSsetup.SubC4i__Influence_Date__c = influenceDate;
+				CLSsetup.SubC4i__Influence_Start__c = influenceStart;
+				CLSsetup.SubC4i__Opportunity_Amount__c = oppAmount;
+				update CLSsetup;
+				//Reload Object Fields
+				getObjectFields();
+			}
+			else{
+				ApexPages.Message missingPermissions = new ApexPages.Message(ApexPages.Severity.Error, 'You do not have the necessary permissions to update the settings.');
+				ApexPages.addMessage(missingPermissions);
+			}
+		}
+		//Insert new Closed Loop Settings
+		else{
+			if(ClosedLoop_Security.isCreateableField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+				ClosedLoop_Security.isCreateableField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c')){
+				CLSsetup.SubC4i__Influence_Date__c = influenceDate;
+				CLSsetup.SubC4i__Influence_Start__c = influenceStart;
+				CLSsetup.SubC4i__Opportunity_Amount__c = oppAmount;
+				insert CLSsetup;
+				//Reload Object Fields
+				getObjectFields();
+				//Display Confirmation
+				ApexPages.Message confirmSaveNew = new ApexPages.Message(ApexPages.Severity.Confirm,'Changes saved. Setup is now complete.');
+				ApexPages.addMessage(confirmSaveNew);
+				ApexPages.Message newSetupInfo = new ApexPages.Message(ApexPages.Severity.Info,'Choose your Report Time Frame and click "Start Refresh" to load data into the closed loop reports');
+				ApexPages.addMessage(newSetupInfo);
+				//Mark settings as active on page
+				isActive = true;
+			}
+			else{
+				ApexPages.Message missingPermissions = new ApexPages.Message(ApexPages.Severity.Error, 'You do not have the necessary permissions to configure the settings.');
+				ApexPages.addMessage(missingPermissions);
+			}
+		}
+	}
+
+	public void customEditMainSettings(){
+		editMainSettings = true;
+	}
+
+	public void customCancel(){
+		//Reset Edit
+		editMainSettings = false;
+		//Reset CLSsetup
+		if(isActive == true){
+			influenceDate = CLSsetup.SubC4i__Influence_Date__c;
+			influenceStart = CLSsetup.SubC4i__Influence_Start__c;
+			oppAmount = CLSsetup.SubC4i__Opportunity_Amount__c;
+		}
+		else{
+			influenceDate = null;
+			influenceStart = null;
+			oppAmount = null;
+		}
+		//Reload Page
+		PageReference pageRef = ApexPages.currentPage();
+	}
+}

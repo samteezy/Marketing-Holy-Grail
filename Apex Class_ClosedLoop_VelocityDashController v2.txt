@@ -1,0 +1,28 @@
+/*
+* Apex Class: ClosedLoop_VelocityDashController
+* Description: 
+	- Apex controller for ClosedLoop_VelocityDashboard page
+* Created By: Matthew McEachern
+* Created Date: 2/14/2017
+* Last Modified By: Matthew McEachern
+* Last Modified: 3/3/2017
+*/
+
+public with sharing class ClosedLoop_VelocityDashController {
+	public ClosedLoop_VelocityDashController(){}
+
+	public PageReference forwardToVelocity(){
+		Id velocityDashboardId = null;
+		List<Dashboard> dashboardList = new List<Dashboard>([SELECT Id, DeveloperName, NamespacePrefix FROM Dashboard WHERE DeveloperName LIKE '%Closed_Loop_Velocity%' AND NamespacePrefix =:'SubC4i' LIMIT 1]);
+		if(dashboardList.size() > 0){
+			velocityDashboardId = dashboardList.get(0).Id;
+		}
+		if(velocityDashboardId != null){
+			PageReference velocityDashboardURL = new PageReference('/' + velocityDashboardId);
+			return velocityDashboardURL;
+		}
+		else{
+			return null;
+		}
+	}
+}

@@ -1,0 +1,74 @@
+/*
+* Apex Class: ClosedLoop_Security
+* Description: 
+	- Central class for security related utility methods
+* Created By: Matthew McEachern
+* Created Date: 4/23/2017
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/24/2017
+*/
+
+public with sharing class ClosedLoop_Security{
+
+	public static Boolean isAccessibleField(String fieldName, String objName){
+		Map<String,Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+		SObjectType myObj = schemaMap.get(objName);
+		if(myObj.getDescribe().isAccessible()){
+			SObjectField myField = myObj.getDescribe().fields.getMap().get(fieldName);
+			if(myField.getDescribe().isAccessible()){
+				return true;
+			}
+			else{
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
+	}
+
+	public static Boolean isCreateableField(String fieldName, String objName){
+		Map<String,Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+		SObjectType myObj = schemaMap.get(objName);
+		if(myObj.getDescribe().isAccessible() && myObj.getDescribe().isCreateable()){
+			SObjectField myField = myObj.getDescribe().fields.getMap().get(fieldName);
+			if(myField.getDescribe().isAccessible() && myField.getDescribe().isCreateable()){
+				return true;
+			}
+			else{
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
+	}
+
+	public static Boolean isUpdateableField(String fieldName, String objName){
+		Map<String,Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+		SObjectType myObj = schemaMap.get(objName);
+		if(myObj.getDescribe().isAccessible() && myObj.getDescribe().isUpdateable()){
+			SObjectField myField = myObj.getDescribe().fields.getMap().get(fieldName);
+			if(myField.getDescribe().isAccessible() && myField.getDescribe().isUpdateable()){
+				return true;
+			}
+			else{
+				return false;
+			}
+		}
+		else{
+			return false;
+		}
+	}
+
+	public static Boolean isDeletableObject(String objName){
+		Map<String,Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+		SObjectType myObj = schemaMap.get(objName);
+		if(myObj.getDescribe().isAccessible() && myObj.getDescribe().isDeletable()){
+			return true;			
+		}
+		else{
+			return false;
+		}
+	}
+}

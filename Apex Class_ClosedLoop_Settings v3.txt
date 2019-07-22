@@ -1,0 +1,45 @@
+/*
+* Apex Class: ClosedLoop_Settings
+* Description: 
+	- Controls and validation rules for Closed Loop Settings object
+* Created By: Matthew McEachern
+* Created Date: 11/4/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/23/2017
+*/
+
+public with sharing class ClosedLoop_Settings {
+	static List<SubC4i__Closed_Loop_Setting__c> activeCLSlist = new List<SubC4i__Closed_Loop_Setting__c>();
+	static boolean existingActiveRule = false;
+
+	public static void applyRules(List<SubC4i__Closed_Loop_Setting__c> newList, Map<Id,SubC4i__Closed_Loop_Setting__c> oldMap, String triggerType){
+		prepRelatedCLS();
+		if(triggerType == 'Before Insert'){
+			for(SubC4i__Closed_Loop_Setting__c CLS: newList){
+				if(CLS.SubC4i__Active__c == true && existingActiveRule == true){
+					CLS.addError('There can only be one active rule at a time.');
+				}
+			}
+		}
+		if(triggerType == 'Before Update'){
+			for(SubC4i__Closed_Loop_Setting__c CLS: newList){
+				SubC4i__Closed_Loop_Setting__c oldCLS = oldMap.get(CLS.Id);
+				if(oldCLS.SubC4i__Active__c == false && CLS.SubC4i__Active__c == true && existingActiveRule == true){
+					CLS.addError('There can only be one active rule at a time.');
+				}
+			}
+		}
+	}
+
+	private static void prepRelatedCLS(){
+		if(ClosedLoop_Security.isAccessibleField('SubC4i__Active__c', 'SubC4i__Closed_Loop_Setting__c')){
+			activeCLSlist = [SELECT SubC4i__Active__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true];
+			for(SubC4i__Closed_Loop_Setting__c CLS: activeCLSlist){
+					existingActiveRule = true;
+			}
+		}
+		else{
+			return;
+		}
+	}
+}

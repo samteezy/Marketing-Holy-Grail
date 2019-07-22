@@ -1,0 +1,18 @@
+/*
+* Apex Trigger: ClosedLoop_SettingsTrigger
+* Description: 
+	- Closed Loop Settings trigger for Closed Loop Report
+* Created By: Matthew McEachern
+* Created Date: 11/4/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 12/2/2016
+*/
+
+trigger ClosedLoop_SettingsTrigger on SubC4i__Closed_Loop_Setting__c (before insert, before update) {
+	if(trigger.isBefore && trigger.isInsert){
+		SubC4i.ClosedLoop_Settings.applyRules(trigger.new, trigger.oldMap, 'Before Insert');
+	}
+	if(trigger.isBefore && trigger.isUpdate){
+		SubC4i.ClosedLoop_Settings.applyRules(trigger.new, trigger.oldMap, 'Before Update');
+	}
+}

@@ -1,0 +1,248 @@
+/*
+* Apex Class: ClosedLoop_TestUtility
+* Description: 
+	- Test utility for Closed Loop Report
+* Created By: Matthew McEachern
+* Created Date: 11/22/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 3/9/2017
+*/
+
+@isTest
+public class ClosedLoop_TestUtility{
+	
+	public static Account createAccount(){
+		Account a = new Account(
+			Name = 'Closed Loop Test Account '+System.now().millisecond(),
+			BillingStreet = '1999 Partytime Blvd', 
+			BillingCity = 'Temple City', 
+			BillingState = 'CA', 
+			BillingPostalCode = '91780', 
+			BillingCountry = 'US',
+			ShippingStreet = '1999 Partytime Blvd',
+			ShippingCity = 'Temple City',
+			ShippingState = 'CA',
+			ShippingPostalCode = '91780',
+			ShippingCountry = 'US'
+		);
+		insert a;
+
+		//Test Assertions
+		List<Account> accountList = new List<Account>([SELECT Id FROM Account]);
+		system.assert(accountList.size() > 0);
+		
+		return a;
+	}
+
+	public static Contact createContact(Id accountId){
+		Contact c = new Contact(
+			AccountId = accountId,
+			FirstName = 'Johnny',
+			LastName = 'Mnemonic',
+			Email = 'Johnny.Mnemonic@SubC4iClosedLoop'+System.now().millisecond()+'.com'
+		);
+		insert c;
+
+		//Test Assertions
+		List<Contact> contactList = new List<Contact>([SELECT Id FROM Contact]);
+		system.assert(contactList.size() > 0);
+
+		return c;
+	}
+
+	public static Opportunity createOpp(Id accountId){
+		Opportunity o = new Opportunity(
+			Name = 'Closed Loop Test Opportunity '+System.now().millisecond(),  
+			AccountId = accountId, 
+			CloseDate = date.today().addDays(30), 
+			StageName = 'Prospecting', 
+			ForecastCategoryName = 'Pipeline',
+			Probability = 10
+		);
+		insert o;
+
+		//Test Assertions
+		List<Opportunity> oppList = new List<Opportunity>([SELECT Id FROM Opportunity]);
+		system.assert(oppList.size() > 0);
+
+		return o;
+	}
+
+	public static String getClosedWonStage(){
+		OpportunityStage os = [SELECT Id, MasterLabel FROM OpportunityStage WHERE IsClosed = true AND IsWon = true AND IsActive = true LIMIT 1];
+		String stage = string.valueOf(os.MasterLabel);
+
+		//Test Assertions
+		system.assert(stage != null);
+
+		return stage;
+	}
+
+	public static String getClosedLostStage(){
+		OpportunityStage os = [SELECT Id, MasterLabel FROM OpportunityStage WHERE IsClosed = true AND IsWon = false AND IsActive = true LIMIT 1];
+		String stage = string.valueOf(os.MasterLabel);
+
+		//Test Assertions
+		system.assert(stage != null);
+
+		return stage;
+	}
+
+	public static PricebookEntry createPricebookEntry(){
+		Product2 product = createProduct();
+		Id pricebookId = Test.getStandardPricebookId();
+		PricebookEntry pbe = new PricebookEntry(
+			Product2Id = product.Id, 
+			Pricebook2Id = pricebookId, 
+			UnitPrice = 150000, 
+			UseStandardPrice = false, 
+			IsActive = true
+		);
+		insert pbe;
+
+		//Test Assertions
+		List<PricebookEntry> PBElist = new List<PricebookEntry>([SELECT Id FROM PricebookEntry]);
+		system.assert(PBElist.size() > 0);
+
+		return pbe;
+	}
+
+	public static Product2 createProduct(){
+		Product2 p = new Product2(
+			Name = 'Test Product', 
+			IsActive = true
+		);
+		insert p;
+
+		//Test Assertions
+		List<Product2> productList = new List<Product2>([SELECT Id FROM Product2]);
+		system.assert(productList.size() > 0);
+
+		return p;
+	}
+	
+	public static OpportunityLineItem createOppLineItem(Opportunity opp, PricebookEntry pbe, Decimal qty){
+		OpportunityLineItem oli = new OpportunityLineItem(
+			OpportunityId = opp.Id, 
+			PricebookEntryId = pbe.Id, 
+			Quantity = qty,
+			TotalPrice = 150000
+		);
+		insert oli;
+
+		//Test Assertions
+		List<OpportunityLineItem> OLIlist = new List<OpportunityLineItem>([SELECT Id FROM OpportunityLineItem]);
+		system.assert(OLIlist.size() > 0);
+
+		return oli;
+	}
+
+	public static Campaign createCampaign(){
+		Campaign c = new Campaign(
+			Name ='Closed Loop Test Campaign '+System.now().millisecond(),
+			IsActive = true,
+			Status = 'In Progress',
+			Type = 'Webinar',
+			StartDate = date.today(),
+			EndDate = date.today().addDays(30)
+		);
+		insert c;
+
+		//Test Assertions
+		List<Campaign> campaignList = new List<Campaign>([SELECT Id FROM Campaign]);
+		system.assert(campaignList.size() > 0);
+
+		return c;
+	}
+
+	public static CampaignMember createCampaignMember(Id campaignId, Id contactId, String status, Date customDate){
+		CampaignMember cm = new CampaignMember(
+			CampaignId = campaignId,
+			ContactId = contactId,
+			Status = status,
+			SubC4i__SubC4i_First_Responded_Date_Custom__c = customDate
+		);
+		insert cm;
+
+		//Test Assertions
+		List<CampaignMember> campMemberList = new List<CampaignMember>([SELECT Id FROM CampaignMember]);
+		system.assert(campMemberList.size() > 0);
+
+		return cm;
+	}
+
+	public static SubC4i__Closed_Loop_Setting__c createCLS(Boolean isActive){
+		SubC4i__Closed_Loop_Setting__c CLS = new SubC4i__Closed_Loop_Setting__c(
+			SubC4i__Active__c = isActive,
+			SubC4i__Influence_Date__c = 'SubC4i__SubC4i_First_Responded_Date_Custom__c',
+			SubC4i__Influence_Start__c = 12,
+			SubC4i__Opportunity_Amount__c = 'Amount',
+			SubC4i__Report_Start__c = date.today().addDays(-60),
+			SubC4i__Report_End__c = date.today().addDays(60),
+			SubC4i__Last_Data_Refresh_Completed__c = null
+		);
+		insert CLS;
+
+		//Test Assertions
+		List<SubC4i__Closed_Loop_Setting__c> CLSlist = new List<SubC4i__Closed_Loop_Setting__c>([SELECT Id FROM SubC4i__Closed_Loop_Setting__c]);
+		system.assert(CLSlist.size() > 0);
+
+		return CLS;
+	}
+	
+	public static SubC4i__Closed_Loop_Report__c createCLR(Id accountId, Id contactId, Id campaignId, Id campMemberId , Id opportunityId, Date influenceDate){
+		SubC4i__Closed_Loop_Report__c CLR = new SubC4i__Closed_Loop_Report__c(
+			SubC4i__Account__c = accountId,
+			SubC4i__Campaign__c = campaignId,
+			SubC4i__Contact__c = contactId,
+			SubC4i__Opportunity__c = opportunityId,
+			SubC4i__Opportunity_Snapshot_Amount__c = 100000,
+			SubC4i__Opportunity_Snapshot_Close_Date__c = date.today().addDays(30),
+			SubC4i__Opportunity_Snapshot_Forecast_Category__c = 'Pipeline',
+			SubC4i__Opportunity_Snapshot_Probability__c = 15,
+			SubC4i__Opportunity_Snapshot_Stage__c = 'Prospecting',
+			SubC4i__Influence_Date__c = influenceDate,
+			SubC4i__Campaign_Member_Created_Date__c = date.today().addDays(-30),
+			SubC4i__Campaign_Member_Status__c = 'Responded'
+		);
+		insert CLR;
+
+		//Test Assertions
+		List<SubC4i__Closed_Loop_Report__c> CLRlist = new List<SubC4i__Closed_Loop_Report__c>([SELECT Id FROM SubC4i__Closed_Loop_Report__c]);
+		system.assert(CLRlist.size() > 0);
+
+		return CLR;
+	}
+
+	public static Id getAdminProfileId(){
+		Profile adminProfile = [SELECT Id, Name FROM Profile WHERE Name = 'System Administrator'];
+
+		//Test Assertions
+		system.assert(adminProfile != null);
+
+		return adminProfile.Id;
+	}
+	
+    public static User createUser(Id profileId){
+		User user = new user(
+			FirstName = 'Matthew',
+			LastName = 'McEachern', 
+			Alias = 'SubC4i', 
+			Email = UserInfo.getOrganizationId()+System.now().millisecond()+'@SubC4i-ClosedLoop.com', 
+			Username = UserInfo.getOrganizationId()+System.now().millisecond()+'@SubC4i-ClosedLoop.com', 
+			CommunityNickname = System.now().millisecond()+'@SubC4i-ClosedLoop.com', 
+			ProfileId = profileId,
+			Emailencodingkey = 'UTF-8', 
+			Languagelocalekey = 'en_US', 
+			Localesidkey = 'en_US', 
+			Timezonesidkey = 'America/Los_Angeles'
+		);
+		insert user;
+
+		//Test Assertions
+		List<User> userList = new List<User>([SELECT Id FROM User]);
+		system.assert(userList.size() > 0);
+
+		return user;
+	}
+}

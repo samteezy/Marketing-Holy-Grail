@@ -1,0 +1,89 @@
+<apex:page title="Settings" controller="SubC4i.ClosedLoop_SettingsPageController" showHeader="true" sidebar="false">
+<!-- 
+ Apex Page: ClosedLoop_SettingsPage
+ Description: 
+	- Visualforce page for Closed Loop Settings and run report data refresh
+ Created By: Matthew McEachern
+ Created Date: 11/5/2016
+ Last Modified By: Matthew McEachern
+ Last Modified: 1/31/2017
+ -->
+	<script>
+		setTimeout("scroll(0, 0)", 300);
+		setTimeout("scroll(0, 0)", 500);
+		setTimeout("scroll(0, 0)", 800);
+	</script>
+
+	<apex:form>
+		<apex:pageMessages></apex:pageMessages>
+		<!--  Settings section -->
+		<apex:pageBlock id="Settings" title="Settings" mode="edit">
+			<apex:pageBlockButtons location="top">
+				<apex:commandButton value="Edit" style="padding: 10px" action="{!customEditMainSettings}" rendered="{!!editMainSettings}"/>
+				<apex:commandButton value="Save" style="padding: 10px" action="{!SaveCLS}" rendered="{!editMainSettings}"/>
+				<apex:commandButton value="Cancel" style="padding: 10px" action="{!customCancel}" rendered="{!editMainSettings}"/>
+			</apex:pageBlockButtons>
+			<p/>
+			<apex:pageBlockSection columns="1">
+				<apex:outputText value="Customize the campaign influence for the closed loop reports.  The results will be generated using an account-based attribution and only include responded campaign activity."/>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection title="Influence Date">
+				<apex:outputText value="Select the date field on the Campaign Member object to use in the reports. This can be the standard field, First Responded Date, or any custom date field on that object."/>
+				<apex:image id="missingItem" rendered="{!(!isActive && !editMainSettings)}" value="/img/func_icons/remove12_on.gif"/>
+				<apex:outputText value="{!influenceDateLabel}" style="width:250px;font-weight:bold" rendered="{!(isActive) && !editMainSettings}"/>
+				<apex:outputPanel>
+					<apex:selectList value="{!selectedCampMemberField}" size="1" multiselect="false" rendered="{!editMainSettings}">
+						<apex:selectOptions value="{!campMemberFieldList}"/>
+					</apex:selectList>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection title="Influence Look-Back (# of Months)">
+				<apex:outputText value="The starting point of your campaign influence. Input the number of months prior to the Opportunity Created Date to attribute campaign activity. The influence time frame will begin X months before Opportunity Created Date and end at the Opportunity Close Date."/>
+				<apex:image id="missingItem" rendered="{!(!isActive && !editMainSettings)}" value="/img/func_icons/remove12_on.gif"/>
+				<apex:outputText value="{!influenceStart}" style="width:50px;font-weight:bold" rendered="{!(isActive) && !editMainSettings}"/>
+				<apex:inputText value="{!influenceStart}" style="width:50px" html-data-skipFocus="true" rendered="{!editMainSettings}"/>
+				<br/>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection title="Opportunity Amount">
+				<apex:outputText value="Select the currency field on the Opportunity object to use in the reports. This can be the standard field, Amount, or any custom field, including any roll-up summary field."/>
+				<apex:image id="missingItem" rendered="{!(!isActive && !editMainSettings)}" value="/img/func_icons/remove12_on.gif"/>
+				<apex:outputText value="{!oppAmountLabel}" style="width:250px;font-weight:bold" rendered="{!(isActive) && !editMainSettings}"/>
+				<apex:outputPanel>
+					<apex:selectList value="{!selectedOppField}" size="1" multiselect="false" rendered="{!editMainSettings}">
+						<apex:selectOptions value="{!oppFieldList}"/>
+					</apex:selectList>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+			<br/>
+		</apex:pageBlock>
+
+		<!-- Refresh Data-->
+		<br/>
+		<apex:pageBlock id="refreshData" title="Refresh Data" mode="edit">
+		<p/>
+			<apex:pageBlockSection columns="1">
+				<apex:outputText value="Clears all existing closed loop report data and processes all existing Opportunity, Campaign, and Campaign Member data within chosen time frame."/>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection title="Report Time Frame" columns="1">
+				<apex:outputText value="Select the time frame for the data that will be included in the closed loop reports and dashboards.  Based on Opportunity Close Date."/>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection>
+				<apex:panelGrid columns="4">
+					<!-- Report Start Date -->
+					<apex:outputText value="From:" style="font-weight:bold"/><apex:inputField html-placeholder="Select Date" html-data-skipFocus="true" value="{!CLSsetup.SubC4i__Report_Start__c}"/>
+					<!-- Report End Date -->
+					<apex:outputText value="To:" style="font-weight:bold"/><apex:inputField html-placeholder="Select Date" html-data-skipFocus="true" value="{!CLSsetup.SubC4i__Report_End__c}"/>
+				</apex:panelGrid>
+				<br/><br/>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection>
+				<apex:panelGrid columns="2">
+					<apex:outputText value="Last Data Refresh Completed:" style="font-weight:bold"/><apex:outputField value="{!CLSsetup.SubC4i__Last_Data_Refresh_Completed__c}" rendered="{!isRefreshDate}"/>
+				</apex:panelGrid>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection>
+				<apex:commandButton value="Start Refresh" style="padding: 10px" action="{!refreshCLR}"/>
+			</apex:pageBlockSection>
+		</apex:pageBlock>
+	</apex:form>
+</apex:page>

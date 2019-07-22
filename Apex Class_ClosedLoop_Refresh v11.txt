@@ -1,0 +1,296 @@
+/*
+* Apex Class: ClosedLoop_Refresh
+* Description: 
+	- Refresh all Closed Loop Report data
+	- Complete rebuild of all report data to ensure data accuracy
+	- Send email to current user when refresh is complete and ready for viewing
+* Created By: Matthew McEachern
+* Created Date: 11/7/2016
+* Last Modified By: Matthew McEachern
+* Last Modified: 4/25/2017
+*/
+
+global with sharing class ClosedLoop_Refresh implements Database.Batchable<sObject>{
+		
+	global ClosedLoop_Refresh(){
+		getCLRsettings();
+	}
+
+	global SubC4i__Closed_Loop_Setting__c CLSsetup = null;
+	global String CLSinfluenceDate = null;
+	global Decimal CLSinfluenceStartMonths = null;
+	global String CLSoppAmount = null;
+	global String CLSreportStart = null;
+	global String CLSreportEnd = null;
+	global Set<Id> oppIds = new Set<Id>();
+	global Set<Id> accountIds = new Set<Id>();
+	global List<Date> oppCreatedDates = new List<Date>();
+	global Map<Id,Opportunity> oppMap = new Map<Id,Opportunity>();
+	global Map<String,SubC4i__Closed_Loop_Report__c> stringKeyCLRmap = new Map<String,SubC4i__Closed_Loop_Report__c>();
+	global Map<Id,List<Opportunity>> accountOppMap = new Map<Id,List<Opportunity>>();
+	global Map<Id,Opportunity> updateOppsMap = new Map<Id,Opportunity>();
+	global List<Account> updateAccounts = new List<Account>();
+	global List<SubC4i__Closed_Loop_Report__c> insertCLR = new List<SubC4i__Closed_Loop_Report__c>();
+
+	global void getCLRsettings(){
+		if(ClosedLoop_Security.isAccessibleField('Id','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c')){
+			List<SubC4i__Closed_Loop_Setting__c> CLSlist = new List<SubC4i__Closed_Loop_Setting__c>([SELECT Id, SubC4i__Active__c, SubC4i__Influence_Date__c, SubC4i__Influence_Start__c, SubC4i__Opportunity_Amount__c, SubC4i__Last_Data_Refresh_Completed__c, SubC4i__Report_Start__c, SubC4i__Report_End__c FROM SubC4i__Closed_Loop_Setting__c WHERE SubC4i__Active__c = true LIMIT 1]);
+			if(CLSlist.size() > 0){
+				CLSsetup = CLSlist.get(0);
+				CLSinfluenceDate = CLSsetup.SubC4i__Influence_Date__c;
+				CLSinfluenceStartMonths = CLSsetup.SubC4i__Influence_Start__c;
+				CLSoppAmount = CLSsetup.SubC4i__Opportunity_Amount__c;
+				CLSreportStart = string.valueOf(CLSsetup.SubC4i__Report_Start__c);
+				CLSreportEnd = string.valueOf(CLSsetup.SubC4i__Report_End__c);
+			}
+		}
+	}
+
+	@deprecated
+	global Boolean checkCreateableCLR(){return false;}
+
+	@deprecated
+	global Boolean checkCreateableCLRfields(){return false;}
+
+	@deprecated
+	global Boolean checkUpdateableCLS(){return false;}
+
+	@deprecated
+	global Boolean checkUpdateableCLSfields(){return false;}
+	
+	global Database.QueryLocator start(Database.BatchableContext BC){
+		if(CLSsetup != null &&
+			//Account
+			ClosedLoop_Security.isAccessibleField('Id','Account') &&
+			//Contact
+			ClosedLoop_Security.isAccessibleField('AccountId','Contact') &&
+			//Opportunity
+			ClosedLoop_Security.isAccessibleField('Id','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('Name','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('AccountId','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('CreatedDate','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('StageName','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('IsClosed','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('IsWon','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('CloseDate','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('ForecastCategoryName','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField('Probability','Opportunity') && 
+			ClosedLoop_Security.isAccessibleField(CLSoppAmount,'Opportunity') && 
+			//Campaign
+			ClosedLoop_Security.isAccessibleField('ParentId','Campaign') &&
+			//Campaign Member
+			ClosedLoop_Security.isAccessibleField('Id','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField('CampaignId','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField('CreatedDate','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField('ContactId','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField('HasResponded','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField('Status','CampaignMember') &&
+			ClosedLoop_Security.isAccessibleField(CLSinfluenceDate,'CampaignMember') &&
+			//Closed Loop Setting
+			ClosedLoop_Security.isAccessibleField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isAccessibleField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c') &&
+			ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') && 
+			//Closed Loop Report
+			ClosedLoop_Security.isCreateableField('SubC4i__Account__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isCreateableField('SubC4i__Contact__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isCreateableField('SubC4i__Campaign__c','SubC4i__Closed_Loop_Report__c') && 
+			ClosedLoop_Security.isCreateableField('SubC4i__Parent_Campaign__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Amount__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Close_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Forecast_Category__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Probability__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Stage__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Campaign_Member_Created_Date__c','SubC4i__Closed_Loop_Report__c') &&
+			ClosedLoop_Security.isCreateableField('SubC4i__Campaign_Member_Status__c','SubC4i__Closed_Loop_Report__c')){
+			string query = 'SELECT Id, Name, AccountId, CreatedDate, StageName, IsClosed, IsWon, CloseDate, ForecastCategoryName, Probability, ' + CLSoppAmount + ' FROM Opportunity WHERE (IsClosed = false OR (IsClosed = true AND IsWon = true)) AND CloseDate >= ' + CLSreportStart + ' AND CloseDate <= ' +CLSreportEnd;
+			return Database.getQueryLocator(query);
+		}
+		else{
+			system.debug('Current user does not have necessary permissions.');
+			System.abortJob(bc.getJobId());
+			return null;
+		}
+	}
+
+   	global void execute(Database.BatchableContext BC, List<Opportunity> scope){
+   		if(
+			//Account
+			!ClosedLoop_Security.isAccessibleField('Id','Account') ||
+			//Contact
+			!ClosedLoop_Security.isAccessibleField('AccountId','Contact') ||
+			//Opportunity
+			!ClosedLoop_Security.isAccessibleField('Id','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('Name','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('AccountId','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('CreatedDate','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('StageName','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('IsClosed','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('IsWon','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('CloseDate','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('ForecastCategoryName','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField('Probability','Opportunity') || 
+			!ClosedLoop_Security.isAccessibleField(CLSoppAmount,'Opportunity') || 
+			//Campaign
+			!ClosedLoop_Security.isAccessibleField('ParentId','Campaign') ||
+			//Campaign Member
+			!ClosedLoop_Security.isAccessibleField('Id','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField('CampaignId','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField('CreatedDate','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField('ContactId','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField('HasResponded','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField('Status','CampaignMember') ||
+			!ClosedLoop_Security.isAccessibleField(CLSinfluenceDate,'CampaignMember') ||
+			//Closed Loop Setting
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Active__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Influence_Start__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Report_Start__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isAccessibleField('SubC4i__Report_End__c','SubC4i__Closed_Loop_Setting__c') ||
+			!ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c') || 
+			//Closed Loop Report
+			!ClosedLoop_Security.isCreateableField('SubC4i__Account__c','SubC4i__Closed_Loop_Report__c') || 
+			!ClosedLoop_Security.isCreateableField('SubC4i__Contact__c','SubC4i__Closed_Loop_Report__c') || 
+			!ClosedLoop_Security.isCreateableField('SubC4i__Campaign__c','SubC4i__Closed_Loop_Report__c') || 
+			!ClosedLoop_Security.isCreateableField('SubC4i__Parent_Campaign__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Amount__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Amount__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Close_Date__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Forecast_Category__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Probability__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Opportunity_Snapshot_Stage__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Influence_Date__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Campaign_Member_Created_Date__c','SubC4i__Closed_Loop_Report__c') ||
+			!ClosedLoop_Security.isCreateableField('SubC4i__Campaign_Member_Status__c','SubC4i__Closed_Loop_Report__c')){
+			system.debug('Current user does not have necessary permissions.');
+			return;
+		}
+
+   		//Copy Scope to List
+   		oppMap.putAll(scope);
+
+   		//Get Related Data
+   		for(Opportunity o: scope){
+   			//Get Ids
+   			oppIds.add(o.Id);
+   			accountIds.add(o.AccountId);
+
+   			//Get Opportunity Created Dates
+   			oppCreatedDates.add(o.CreatedDate.date());
+
+   			//Sort Opportunities by Account
+   			if(accountOppMap.containsKey(o.AccountId)){
+				accountOppMap.get(o.AccountId).add(o);
+			}
+			else{
+				List<Opportunity> tempOppList = new List<Opportunity>();
+				tempOppList.add(o);
+				accountOppMap.put(o.AccountId,tempOppList);
+			}
+   		}
+
+   		//Sort Opportunity Created Dates
+   		oppCreatedDates.sort();
+
+		//Only get related Campaign Members first responded within X months before opportunity created date
+		Date firstOppCreatedDate = oppCreatedDates.get(0);
+		Integer influenceStartMonths = CLSinfluenceStartMonths.intValue();
+		String firstInfluenceDate = string.valueOf(firstOppCreatedDate.addMonths(-influenceStartMonths));
+
+		List<CampaignMember> campaignMemberList = new List<CampaignMember>();
+		string selectSOQL = 'SELECT Id, CampaignId, Campaign.ParentId, CreatedDate, ContactId, Contact.AccountId, HasResponded, Status, ' + CLSinfluenceDate;
+		string fromSOQL = ' FROM CampaignMember ';
+		string whereSOQL = 'WHERE ContactId != null AND Contact.AccountId IN: accountIds AND HasResponded = true AND ' + CLSinfluenceDate + ' != null AND ' + CLSinfluenceDate + ' >= ' + firstInfluenceDate + ' AND ' + CLSinfluenceDate + ' <= ' + CLSreportEnd;
+		string completeSOQL = selectSOQL + fromSOQL + whereSOQL;
+		campaignMemberList = Database.query(completeSOQL);
+		
+		//Create CLR records for Opportunities WITH Campaign Influence
+		for(CampaignMember cm: campaignMemberList){
+			if(accountOppMap.containsKey(cm.Contact.AccountId)){
+				for(Opportunity o: accountOppMap.get(cm.Contact.AccountId)){
+					if((Date)cm.get(CLSinfluenceDate) >= o.CreatedDate.addMonths(-CLSinfluenceStartMonths.intValue()) && ((o.IsClosed == false) || (o.IsClosed == true && (Date)cm.get(CLSinfluenceDate) <= o.CloseDate))){
+						//Unique Key to prevent duplicates
+						String uniqueKey = string.valueOf(o.AccountId) + string.valueOf(cm.CampaignId) + string.valueOf(cm.ContactId) + string.valueOf(o.Id);
+						if(!stringKeyCLRmap.containsKey(uniqueKey)){
+							//Remove Opportunities w/campaign influence from oppMap
+							oppMap.remove(o.Id);
+							//Create new Closed Loop Report records
+							SubC4i__Closed_Loop_Report__c CLR = new SubC4i__Closed_Loop_Report__c(
+								SubC4i__Account__c = o.AccountId,
+								SubC4i__Campaign__c = cm.CampaignId,
+								SubC4i__Parent_Campaign__c = cm.Campaign.ParentId,
+								SubC4i__Contact__c = cm.ContactId,
+								SubC4i__Opportunity__c = o.Id,
+								SubC4i__Opportunity_Snapshot_Amount__c = (Decimal)o.get(CLSoppAmount),
+								SubC4i__Opportunity_Snapshot_Close_Date__c = o.CloseDate,
+								SubC4i__Opportunity_Snapshot_Forecast_Category__c = o.ForecastCategoryName,
+								SubC4i__Opportunity_Snapshot_Probability__c = o.Probability,
+								SubC4i__Opportunity_Snapshot_Stage__c = o.StageName,
+								SubC4i__Influence_Date__c = (Date)cm.get(CLSinfluenceDate),
+								SubC4i__Campaign_Member_Created_Date__c = cm.CreatedDate,
+								SubC4i__Campaign_Member_Status__c = cm.Status
+							);
+							stringKeyCLRmap.put(uniqueKey,CLR);
+							insertCLR.add(CLR);
+						}
+					}
+				}
+			}
+		}
+
+		//Create CLR records for Opportunities WITHOUT Campaign Influence
+		for(Opportunity o: oppMap.values()){
+			SubC4i__Closed_Loop_Report__c CLR = new SubC4i__Closed_Loop_Report__c(
+				SubC4i__Account__c = o.AccountId,
+				SubC4i__Opportunity__c = o.Id,
+				SubC4i__Opportunity_Amount__c = (Decimal)oppMap.get(o.Id).get(CLSoppAmount)
+			);
+			insertCLR.add(CLR);
+		}
+
+		if(insertCLR.size() > 0){
+			insert insertCLR;
+		}
+
+		if(oppIds.size() > 0){
+			SubC4i.ClosedLoop_Metrics updateMetrics = new SubC4i.ClosedLoop_Metrics(accountIds, oppIds);
+			Id jobId = System.enqueueJob(updateMetrics); 
+		}
+	}
+	
+	global void finish(Database.BatchableContext BC){
+		//Send Email Notification
+		String subjectLine = 'Salesforce Alert - Marketing Holy Grail data refresh has completed';
+		String messageBodyText = 
+		'The closed loop data refresh for the Marketing Holy Grail has completed.';
+		Messaging.reserveSingleEmailCapacity(1);
+		Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+		mail.setTargetObjectId(userinfo.getUserId());
+		mail.setSaveAsActivity(false);
+		mail.setSubject(subjectLine);
+		mail.setPlainTextBody(messageBodyText);
+		Messaging.sendEmail(new Messaging.SingleEmailMessage[] {mail});
+		//Update Last Data Refresh Completed timestamp
+		if(ClosedLoop_Security.isUpdateableField('SubC4i__Last_Data_Refresh_Completed__c','SubC4i__Closed_Loop_Setting__c')){	
+			CLSsetup.SubC4i__Last_Data_Refresh_Completed__c = datetime.now();
+			update CLSsetup;
+		}
+	}
+}
